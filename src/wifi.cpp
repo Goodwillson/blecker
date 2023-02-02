@@ -26,7 +26,8 @@ class Wifi {
         String password;
 
         int tries = 0;
-
+        int APstart = 0;
+        
         Wifi(Log &log) {
             this -> rlog = &log;
         }
@@ -77,7 +78,8 @@ class Wifi {
 
         void createAP() {
             configAP();
-            WiFi.mode(WIFI_AP);
+            WiFi.mode(WIFI_AP);  
+            APstart = millis();
             rlog -> log(log_prefix + "AP is created from a function. Name: " + BOARD_NAME);
         }
 
@@ -187,6 +189,12 @@ class Wifi {
         void wifiDisconnectedLoop() {
             // Try to reconnect time to time
             // TODO
+            if ((millis() - APstart) > (5 * 60 * 1000)) { // 5 min               
+                if (ssid.length() > 0) {
+                    //this -> connectToAP();
+                    ESP.restart();
+                }
+            }
         }
 
         void setupMDNS() {

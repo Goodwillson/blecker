@@ -27,16 +27,16 @@ class Mqtt {
     String deviceID;
     int port;
     String baseTopic;
-
     String deviceIPAddress = "undefined";
-
+    
     // MQTT connect try
     int lasttry = 10000;
     int maxtry = 10;
+    int MQTTconnectTime = 0;
 
     boolean networkConnected = false; // Connected to the network (Wifi STA)
     boolean subscribed = false;
-    boolean lastWillRetain = false;
+    boolean lastWillRetain = true;
 
     public:
         Mqtt(Log &log) {
@@ -95,7 +95,7 @@ class Mqtt {
                     }
                 } else {
                     client->stop();
-                    this -> subscribed = false;
+                    this -> subscribed = false;                    
                     reconnect();
                 }
             } else {
@@ -143,15 +143,29 @@ class Mqtt {
         }
 
         void reconnect() {
-            if (!String("").equals(server)) {
-                const char* mqtt_s = const_cast<char*>(server.c_str());
-                if (!client -> connect(mqtt_s, port)) {                    
-                    this -> rlog -> log(log_prefix, (String) "MQTT connection failed! Error code = " + client -> connectError());
-                    this -> errorCodeChanged->fire(ERROR_MQTT);
-                } else {
-                    rlog -> log(log_prefix, "Connection started.");
+            if (!String("").equals(server))
+            {
+                const char *mqtt_s = const_cast<char *>(server.c_str());
+                
+                if (millis() - MQTTconnectTime > 15 * 1000) // 15 sec
+                { 
+                    rlog->log(log_prefix, "Connecting to MQTT server...");
+                    setLastWill();
+                    if (!client->connect(mqtt_s, port))
+                    {
+                       this->rlog->log(log_prefix, (String) "MQTT connection failed! Error code = " + client->connectError());
+                       this->errorCodeChanged->fire(ERROR_MQTT);
+                    }
+                    else
+                    {
+                       rlog->log(log_prefix, "MQTT Connection started.");
+                    }
+
+                    MQTTconnectTime = millis();
                 }
-            } else {
+            }
+            else
+            {
                 // rlog -> log(log_prefix, "MQTT connection info is missing.");
             }
         }
@@ -170,13 +184,11 @@ class Mqtt {
         }
 
         void subscribeForBaseTopic () {
-
-            setLastWill();
-
+          
             // subscribe to a topic and send an 'I'm alive' message
             String subscription = baseTopic + MQTT_IN_POSTFIX + "/#";
             client -> subscribe(subscription);
-            sendMqttMessage(baseTopic, "{\"status\": \"" + statusOn + "\", \"ip\":\"" + this -> deviceIPAddress + "\"}");
+            sendMqttMessage(baseTopic, "{\"status\": \"" + statusOn + "\", \"ip\":\"" + this -> deviceIPAddress + "\"}", true);
             rlog -> log(log_prefix, "Subscribed to topic " + subscription);
             
             
