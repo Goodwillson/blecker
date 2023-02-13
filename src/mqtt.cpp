@@ -13,6 +13,7 @@
 class Mqtt {
 
     Log* rlog;
+    Signal<boolean>* mqttStatusChanged;
     String log_prefix = "[MQTT] ";
     WiFiClient wifiClient;
     MqttClient* client;
@@ -37,6 +38,7 @@ class Mqtt {
     boolean networkConnected = false; // Connected to the network (Wifi STA)
     boolean subscribed = false;
     boolean lastWillRetain = true;
+    boolean mqtt_connected = false;
 
     public:
         Mqtt(Log &log) {
@@ -44,9 +46,10 @@ class Mqtt {
             this -> client = new MqttClient(wifiClient);
         }
 
-        void setup(Database &database, Signal<int> &errorCodeChanged, Signal<String> &mqttMessageArrived) {
+        void setup(Database &database, Signal<boolean> &mqttStatusChanged, Signal<int> &errorCodeChanged, Signal<String> &mqttMessageArrived) {
 
             this -> database = &database;
+            this -> mqttStatusChanged = &mqttStatusChanged;
             this -> errorCodeChanged = &errorCodeChanged;
             this -> mqttMessageArrived = &mqttMessageArrived;
             
@@ -101,6 +104,9 @@ class Mqtt {
             } else {
                 client->stop();
                 this -> subscribed = false;
+                mqtt_connected = false;
+                // Emit an event about the MQTT status
+                mqttStatusChanged->fire(mqtt_connected);
             }
         }
 
@@ -155,10 +161,16 @@ class Mqtt {
                     {
                        this->rlog->log(log_prefix, (String) "MQTT connection failed! Error code = " + client->connectError());
                        this->errorCodeChanged->fire(ERROR_MQTT);
+                       mqtt_connected = false;
+                       // Emit an event about the MQTT status
+                       mqttStatusChanged->fire(mqtt_connected);
                     }
                     else
                     {
                        rlog->log(log_prefix, "MQTT Connection started.");
+                       mqtt_connected = true;
+                       // Emit an event about the MQTT status
+                       mqttStatusChanged->fire(mqtt_connected);
                     }
 
                     MQTTconnectTime = millis();

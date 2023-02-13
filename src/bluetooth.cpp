@@ -44,6 +44,7 @@ class BlueTooth: public BLEAdvertisedDeviceCallbacks {
     boolean monitorObservedOnly = false; // Monitor devices only which are configured in the database
 
     boolean networkConnected = false; // Connected to the network (Wifi STA)
+    boolean mqttConnected = false; // Connected to MQTT server
 
     LinkedList<Device> devices = LinkedList<Device>();
     LinkedList<int> devicesToRemove = LinkedList<int>();
@@ -101,7 +102,7 @@ class BlueTooth: public BLEAdvertisedDeviceCallbacks {
 
             if (millis() - lastRun > scanAfter) {
                 // Otherwise makes no sens to scan and sent it over
-                if (networkConnected) {
+                if (networkConnected && mqttConnected) {
                     BLEScanResults foundDevices = pBLEScan->start(5, false);            
                     pBLEScan->clearResults();   // delete results fromBLEScan buffer to release memory
                     lastRun = millis();
@@ -189,12 +190,16 @@ class BlueTooth: public BLEAdvertisedDeviceCallbacks {
         void setConnected(boolean connected) {
             this -> networkConnected = connected;
         }
+
+        void setMqttConnected(boolean connected) {
+            this -> mqttConnected = connected;
+        }
 private: 
         
 
         void onResult(BLEAdvertisedDevice advertisedDevice) {
             // Serial.printf("Advertised Device: %s \n", advertisedDevice.toString().c_str());
-            //rlog -> log(log_prefix, (String) "Found device MAC: " + advertisedDevice.getAddress().toString().c_str());
+            // rlog -> log(log_prefix, (String) "Found device MAC: " + advertisedDevice.getAddress().toString().c_str());
             
             boolean newFound = true;
             String deviceMac = advertisedDevice.getAddress().toString().c_str();
@@ -206,10 +211,10 @@ private:
             for (int i = 0; i < this -> devices.size(); i++) {
                 Device dev = devices.get(i);
                 if (deviceMac == dev.mac) {
-
+                    // rlog -> log(log_prefix, (String) "MAC in list: " + deviceMac + " prev. status:" + dev.available);
                     // Device came back (state changed)
                     if (!dev.available) {
-                        // Send an MQTT message about this device is at home
+                        // Send an MQTT message about this device is at home                        
                         dev.available = true;
                         handleDeviceChange(dev);
                     }
@@ -218,7 +223,7 @@ private:
                     dev.available = true;
                     devices.set(i, dev);                   
                     newFound = false;
-                }
+                }                
             }
 
             if (!monitorObservedOnly) {
@@ -261,6 +266,7 @@ private:
         }
 
         void handleDeviceChange(Device dev) {
+            rlog -> log(log_prefix, (String) "MQTT sending status for " + dev.mac + ": " + getPresentString(*database, dev.available));
             mqttMessageSend->fire(MQTTMessage{dev.mac, getPresentString(*database, dev.available), true});
             // TODO: need to refactor, send only one message for the consumers
             deviceChanged->fire(dev);
